@@ -3,5 +3,6 @@ dist/
 *.db
 *.db-journal
 *.log
+*.tsbuildinfo
 .env
 .DS_Store
