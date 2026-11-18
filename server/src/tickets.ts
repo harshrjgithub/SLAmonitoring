@@ -3,17 +3,14 @@
 
 import type { Priority } from './sla.js';
 
-export const STATUSES = ['open', 'in_progress', 'on_hold', 'resolved', 'closed'] as const;
+export const STATUSES = ['open', 'assigned', 'in_progress', 'on_hold', 'escalated', 'resolved', 'closed', 'reopened'] as const;
 export type Status = (typeof STATUSES)[number];
 
-export const PRIORITIES: Priority[] = ['urgent', 'high', 'normal', 'low'];
+export const PRIORITIES: Priority[] = ['critical', 'urgent', 'high', 'medium', 'normal', 'low'];
 
 export const CATEGORIES = [
-  'hardware',
-  'software',
-  'network',
-  'account_access',
-  'email',
+  'core_banking', 'network', 'hardware', 'printers_scanners', 'account_access',
+  'email', 'banking_app', 'cybersecurity', 'atm_payments', 'software', 'hr_confidential',
   'other',
 ] as const;
 export type Category = (typeof CATEGORIES)[number];
@@ -23,11 +20,14 @@ export type Category = (typeof CATEGORIES)[number];
  * callers). Closed is terminal; resolved can be reopened or closed.
  */
 const TRANSITIONS: Record<Status, Status[]> = {
-  open: ['in_progress', 'on_hold', 'resolved', 'closed'],
-  in_progress: ['on_hold', 'resolved', 'closed'],
-  on_hold: ['in_progress', 'resolved', 'closed'],
-  resolved: ['closed', 'in_progress'], // reopen -> in_progress
-  closed: [], // terminal
+  open: ['assigned', 'in_progress', 'on_hold', 'escalated'],
+  assigned: ['in_progress', 'on_hold', 'escalated', 'resolved'],
+  in_progress: ['on_hold', 'escalated', 'resolved'],
+  on_hold: ['in_progress', 'escalated', 'resolved'],
+  escalated: ['assigned', 'in_progress', 'on_hold', 'resolved'],
+  resolved: ['closed', 'reopened'],
+  closed: ['reopened'],
+  reopened: ['assigned', 'in_progress', 'escalated', 'resolved'],
 };
 
 export function isValidStatus(value: unknown): value is Status {
@@ -69,14 +69,14 @@ export function transitionStatus(
   }
   const becameResolved = to === 'resolved' && from !== 'resolved';
   const wasResolved = from === 'resolved' || from === 'closed';
-  const nowOpen = to === 'in_progress';
+  const nowOpen = to === 'reopened' || to === 'in_progress';
   return {
     resolved: becameResolved,
     reopened: wasResolved && nowOpen,
   };
 }
 
-const OPEN_STATUSES: Status[] = ['open', 'in_progress', 'on_hold'];
+const OPEN_STATUSES: Status[] = ['open', 'assigned', 'in_progress', 'on_hold', 'escalated', 'reopened'];
 
 export function isOpenStatus(status: Status): boolean {
   return OPEN_STATUSES.includes(status);

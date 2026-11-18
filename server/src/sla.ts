@@ -4,12 +4,14 @@
 // derive its SLA due date, and at any moment we can classify it as on-track,
 // at-risk (inside the final quarter of its window), or breached.
 
-export type Priority = 'urgent' | 'high' | 'normal' | 'low';
+export type Priority = 'critical' | 'urgent' | 'high' | 'medium' | 'normal' | 'low';
 
 /** Target resolution time per priority, in minutes. */
 export const SLA_RESOLUTION_MINUTES: Record<Priority, number> = {
+  critical: 4 * 60,
   urgent: 4 * 60, //  4 hours
   high: 8 * 60, //  8 hours (one business day)
+  medium: 24 * 60,
   normal: 24 * 60, //  1 day
   low: 72 * 60, //  3 days
 };

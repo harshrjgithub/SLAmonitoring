@@ -1,16 +1,17 @@
 import { Router } from 'express';
 import type { DB } from '../db.js';
-import { requireAuth, requireRole } from '../auth.js';
+import { hasPermission, requireAuth, requireRole, type AuthedRequest } from '../auth.js';
 import { computeStats, type TicketLike } from '../tickets.js';
 import { getSlaStatus, type Priority } from '../sla.js';
 
 export function statsRoutes(db: DB): Router {
   const router = Router();
 
-  // Dashboard metrics — staff only.
-  router.get('/', requireAuth, requireRole('agent', 'admin'), (_req, res) => {
-    const rows = db
-      .prepare('SELECT status, priority, assignee_id, created_at, resolved_at FROM tickets')
+  // Organisation ticket dashboard is available to every active employee;
+  // restricted HR/cybersecurity counts are withheld from unauthorised viewers.
+  router.get('/', requireAuth, (req: AuthedRequest, res) => {
+    const canSeeSensitive = req.user!.role === 'admin' || hasPermission(db, req.user!.sub, req.user!.role, 'view_sensitive_tickets');
+    const rows = db.prepare(`SELECT status, priority, assignee_id, created_at, resolved_at FROM tickets ${canSeeSensitive ? '' : "WHERE sensitivity != 'restricted' AND is_sensitive=0"}`)
       .all() as unknown as Array<TicketLike & { priority: Priority; created_at: string; resolved_at: string | null }>;
 
     const stats = computeStats(rows);

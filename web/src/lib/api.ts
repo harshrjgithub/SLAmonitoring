@@ -1,5 +1,5 @@
 import type {
-  Agent, Comment, Stats, Ticket, User,
+  Agent, Comment, Employee, Stats, Ticket, TicketHistory, User,
 } from './types';
 
 const TOKEN_KEY = 'helpdesk_token';
@@ -48,7 +48,8 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 export interface TicketFilters {
   status?: string;
   priority?: string;
-  assignee?: 'me' | 'unassigned';
+  assignee?: string;
+  q?: string; category?: string; department_id?: string; branch_id?: string; assignee_id?: string; team_id?: string; sort?: string; direction?: string;
 }
 
 export const api = {
@@ -66,6 +67,20 @@ export const api = {
 
   me: () => request<{ user: User }>('/auth/me'),
 
+  changePassword: (newPassword: string, currentPassword?: string) =>
+    request<{ changed: boolean }>('/auth/change-password', { method: 'POST', body: JSON.stringify({ newPassword, currentPassword }) }),
+
+  employees: (q = '') => request<{ employees: Employee[] }>(`/employees?q=${encodeURIComponent(q)}`),
+  createEmployee: (input: { name: string; email: string; employee_id: string; role: string; designation: string }) =>
+    request<{ employee: Employee; temporaryPassword: string }>('/employees', { method: 'POST', body: JSON.stringify(input) }),
+  updateEmployee: (id: number, changes: Partial<Employee>) =>
+    request<{ employee: Employee }>(`/employees/${id}`, { method: 'PATCH', body: JSON.stringify(changes) }),
+  organisation: () => request<{ branches: Array<{id:number;name:string}>; departments: Array<{id:number;name:string}>; teams: Array<{id:number;name:string}>; roles: Array<{id:number;name:string;role_key:string}> }>('/organisation'),
+  directory: () => request<{employees:Array<{id:number;name:string;email:string;employee_id:string;role:string;department_id:number|null;department_name:string|null;branch_id:number|null;branch_name:string|null;team_id:number|null}>}>('/organisation/directory'),
+  createTeam: (input: { name: string; description?: string }) => request<{ team: {id:number;name:string} }>('/organisation/teams', { method: 'POST', body: JSON.stringify(input) }),
+  createRole: (input: { name: string; description?: string; permissions: string[] }) => request('/organisation/roles', { method: 'POST', body: JSON.stringify(input) }),
+  permissions: () => request<{permissions:Array<{id:number;name:string;permission_key:string;description:string}>}>('/organisation/permissions'),
+
   listTickets: (filters: TicketFilters = {}) => {
     const params = new URLSearchParams();
     for (const [k, v] of Object.entries(filters)) if (v) params.set(k, v);
@@ -74,10 +89,13 @@ export const api = {
   },
 
   getTicket: (id: number) =>
-    request<{ ticket: Ticket; comments: Comment[] }>(`/tickets/${id}`),
+    request<{ ticket: Ticket; comments: Comment[]; history: TicketHistory[]; attachments?: import('./types').TicketAttachment[] }>(`/tickets/${id}`),
 
   createTicket: (input: {
     title: string; description: string; priority: string; category: string;
+    department_id?: number | null; affected_user_id?: number | null;
+    assignee_id?: number | null; team_id?: number | null;
+    attachments?: Array<{file_name:string;mime_type:string;size_bytes:number;base64:string}>;
   }) =>
     request<{ ticket: Ticket }>('/tickets', {
       method: 'POST',
@@ -98,6 +116,16 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ body }),
     }),
+
+  ticketAction: (ticketId: number, action: string, input: Record<string, unknown> = {}) =>
+    request<{ ticket: Ticket }>(`/tickets/${ticketId}/actions`, {
+      method: 'POST',
+      body: JSON.stringify({ action, ...input }),
+    }),
+
+  notifications: () => request<{notifications:Array<{id:number;ticket_id:number|null;type:string;message:string;is_read:number;created_at:string;ticket_title:string|null}>}>('/notifications'),
+  markNotificationRead: (id:number) => request<{read:boolean}>(`/notifications/${id}/read`,{method:'PATCH'}),
+  markAllNotificationsRead: () => request<{updated:number}>('/notifications/read-all',{method:'PATCH'}),
 
   stats: () => request<Stats>('/stats'),
 

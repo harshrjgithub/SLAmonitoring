@@ -1,157 +1,44 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { api, ApiError } from '../lib/api';
-import { useAuth, isStaff } from '../lib/auth';
-import {
-  CATEGORY_LABELS, STATUS_LABELS, PRIORITY_LABELS,
-  type Ticket, type Comment, type Agent, type Status, type Priority,
-} from '../lib/types';
+import { useAuth } from '../lib/auth';
+import { CATEGORY_LABELS, PRIORITY_LABELS, type Ticket, type Comment, type TicketHistory, type TicketAttachment, type Agent, type Priority } from '../lib/types';
 import { StatusBadge, PriorityBadge, SlaBadge } from '../components/Badges';
 import { relativeTime } from '../lib/format';
 
-const PRIORITIES: Priority[] = ['urgent', 'high', 'normal', 'low'];
-
-export function TicketDetailPage() {
-  const { id } = useParams();
-  const ticketId = Number(id);
-  const { user } = useAuth();
-  const staff = isStaff(user?.role);
-
-  const [ticket, setTicket] = useState<Ticket | null>(null);
-  const [comments, setComments] = useState<Comment[]>([]);
-  const [agents, setAgents] = useState<Agent[]>([]);
-  const [comment, setComment] = useState('');
-  const [error, setError] = useState('');
-
-  function load() {
-    api.getTicket(ticketId)
-      .then((res) => { setTicket(res.ticket); setComments(res.comments); })
-      .catch((e) => setError(e.message));
-  }
-
-  useEffect(() => {
-    load();
-    if (staff) api.agents().then((r) => setAgents(r.agents)).catch(() => {});
-  }, [ticketId, staff]);
-
-  async function patch(changes: { status?: string; priority?: string; assignee_id?: number | null }) {
-    setError('');
-    try {
-      const res = await api.updateTicket(ticketId, changes);
-      setTicket(res.ticket);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Update failed');
-    }
-  }
-
-  async function submitComment(e: FormEvent) {
-    e.preventDefault();
-    if (!comment.trim()) return;
-    try {
-      const res = await api.addComment(ticketId, comment);
-      setComments((prev) => [...prev, res.comment]);
-      setComment('');
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not add comment');
-    }
-  }
-
-  if (error && !ticket) return <div className="error-box">{error}</div>;
-  if (!ticket) return <div className="center muted">Loading…</div>;
-
-  return (
-    <div>
-      <Link to="/tickets" className="back-link">← Back to tickets</Link>
-
-      <div className="detail-head">
-        <div>
-          <h1><span className="ticket-id">#{ticket.id}</span> {ticket.title}</h1>
-          <div className="muted">
-            {CATEGORY_LABELS[ticket.category] ?? ticket.category} · opened by {ticket.requester_name} {relativeTime(ticket.created_at)}
-          </div>
-        </div>
-        <div className="detail-badges">
-          <PriorityBadge priority={ticket.priority} />
-          <StatusBadge status={ticket.status} />
-          {ticket.status !== 'closed' && <SlaBadge sla={ticket.sla} />}
-        </div>
-      </div>
-
-      {error && <div className="error-box">{error}</div>}
-
-      <div className="grid-detail">
-        <div>
-          <div className="card">
-            <h2>Description</h2>
-            <p className="description">{ticket.description || <span className="muted">No description provided.</span>}</p>
-          </div>
-
-          <div className="card">
-            <h2>Conversation</h2>
-            {comments.length === 0 && <p className="muted">No comments yet.</p>}
-            <ul className="comments">
-              {comments.map((c) => (
-                <li key={c.id} className={`comment ${isStaff(c.author_role) ? 'from-staff' : ''}`}>
-                  <div className="comment-head">
-                    <strong>{c.author_name}</strong>
-                    <span className={`badge role-${c.author_role}`}>{c.author_role}</span>
-                    <span className="muted">{relativeTime(c.created_at)}</span>
-                  </div>
-                  <div className="comment-body">{c.body}</div>
-                </li>
-              ))}
-            </ul>
-            <form className="comment-form" onSubmit={submitComment}>
-              <textarea value={comment} onChange={(e) => setComment(e.target.value)}
-                rows={3} placeholder="Add a reply…" />
-              <button type="submit" className="btn-primary" disabled={!comment.trim()}>Reply</button>
-            </form>
-          </div>
-        </div>
-
-        <aside className="card side-panel">
-          <h2>Details</h2>
-          <dl className="detail-list">
-            <dt>Requester</dt><dd>{ticket.requester_name}</dd>
-            <dt>Assignee</dt><dd>{ticket.assignee_name ?? <span className="muted">Unassigned</span>}</dd>
-            <dt>Priority</dt><dd>{PRIORITY_LABELS[ticket.priority]}</dd>
-            <dt>Status</dt><dd>{STATUS_LABELS[ticket.status]}</dd>
-            <dt>SLA due</dt><dd>{relativeTime(ticket.sla.dueAt)}</dd>
-            {ticket.resolved_at && (<><dt>Resolved</dt><dd>{relativeTime(ticket.resolved_at)}</dd></>)}
-          </dl>
-
-          {staff && (
-            <div className="staff-controls">
-              <h3>Agent actions</h3>
-              <label>
-                Change status
-                <div className="transition-buttons">
-                  {ticket.allowedTransitions.length === 0 && <span className="muted">No further transitions</span>}
-                  {ticket.allowedTransitions.map((s: Status) => (
-                    <button key={s} className="btn-ghost btn-sm" onClick={() => patch({ status: s })}>
-                      → {STATUS_LABELS[s]}
-                    </button>
-                  ))}
-                </div>
-              </label>
-              <label>
-                Assign to
-                <select value={ticket.assignee_id ?? ''} onChange={(e) =>
-                  patch({ assignee_id: e.target.value ? Number(e.target.value) : null })}>
-                  <option value="">Unassigned</option>
-                  {agents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-                </select>
-              </label>
-              <label>
-                Priority
-                <select value={ticket.priority} onChange={(e) => patch({ priority: e.target.value })}>
-                  {PRIORITIES.map((p) => <option key={p} value={p}>{PRIORITY_LABELS[p]}</option>)}
-                </select>
-              </label>
-            </div>
-          )}
-        </aside>
-      </div>
-    </div>
-  );
+const PRIORITIES:Priority[]=['critical','high','medium','low'];
+export function TicketDetailPage(){
+  const {id}=useParams();const ticketId=Number(id);const {user}=useAuth();
+  const [ticket,setTicket]=useState<Ticket|null>(null);const [comments,setComments]=useState<Comment[]>([]);const [history,setHistory]=useState<TicketHistory[]>([]);
+  const [attachments,setAttachments]=useState<TicketAttachment[]>([]);const [resolutionFile,setResolutionFile]=useState<File|null>(null);
+  const [agents,setAgents]=useState<Agent[]>([]);const [teams,setTeams]=useState<Array<{id:number;name:string}>>([]);const [comment,setComment]=useState('');const [resolution,setResolution]=useState('');const [reason,setReason]=useState('');const [note,setNote]=useState('');const [assignee,setAssignee]=useState('');const [team,setTeam]=useState('');const [error,setError]=useState('');const [success,setSuccess]=useState('');const [busy,setBusy]=useState(false);
+  const manager=user?.role==='admin'||Boolean(user?.permissions?.includes('manage_employees'));const can=manager||Boolean(user?.permissions?.includes('assign_tickets'));const support=manager||user?.role==='agent'||Boolean(user?.permissions?.includes('update_ticket_status'));const assigned=Boolean(user&&ticket&&(ticket.assignee_id===user.id||(ticket.team_id&&ticket.team_id===user.team_id)));
+  async function load(){try{const r=await api.getTicket(ticketId);setTicket(r.ticket);setComments(r.comments);setHistory(r.history);setAttachments(r.attachments??[]);}catch(e){setError(e instanceof ApiError?e.message:'Could not load ticket');}}
+  useEffect(()=>{void load();api.agents().then(r=>setAgents(r.agents)).catch(()=>{});api.organisation().then(r=>setTeams(r.teams)).catch(()=>{});},[ticketId]);
+  async function act(action:string,input:Record<string,unknown>={}){setError('');setSuccess('');setBusy(true);try{await api.ticketAction(ticketId,action,input);setSuccess('Ticket updated.');await load();}catch(e){setError(e instanceof ApiError?e.message:'Ticket update failed');}finally{setBusy(false);}}
+  async function submitComment(e:FormEvent){e.preventDefault();if(!comment.trim())return;setBusy(true);try{await api.addComment(ticketId,comment);setComment('');await load();}catch(e){setError(e instanceof ApiError?e.message:'Could not add update');}finally{setBusy(false);}}
+  async function submitNote(e:FormEvent){e.preventDefault();if(!note.trim())return;await act('internal_note',{body:note});setNote('');}
+  async function submitResolution(e:FormEvent){e.preventDefault();if(resolution.trim().length<8){setError('Please describe the resolution in at least 8 characters.');return;}let resolution_attachment:unknown;if(resolutionFile){const data=await new Promise<string>((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result));reader.onerror=()=>reject(new Error('Unable to read attachment'));reader.readAsDataURL(resolutionFile);});resolution_attachment={file_name:resolutionFile.name,mime_type:resolutionFile.type,size_bytes:resolutionFile.size,base64:data.split(',')[1]??''};}await act('resolve',{resolution_description:resolution,...(resolution_attachment?{resolution_attachment}:{})});setResolution('');setResolutionFile(null);}
+  if(!ticket&&error)return <div className="error-box">{error}</div>;if(!ticket)return <div className="center muted">Loading ticket…</div>;
+  const confirmer=[ticket.requester_id,ticket.affected_user_id].includes(user?.id??-1);const canConfirm=(confirmer||manager)&&ticket.status==='resolved'&&ticket.resolved_by!==user?.id;
+  return <section><Link to="/tickets" className="back-link">← Organisation tickets</Link>
+    <div className="detail-head"><div><p className="eyebrow">{ticket.branch_name||'BANKOPS SERVICE DESK'}{ticket.sensitivity==='restricted'?' · RESTRICTED':''}</p><h1><span className="ticket-id">#{ticket.id}</span> {ticket.title}</h1><div className="muted">{CATEGORY_LABELS[ticket.category]??ticket.category} · raised by {ticket.requester_name} · {relativeTime(ticket.created_at)}</div></div><div className="detail-badges"><PriorityBadge priority={ticket.priority}/><StatusBadge status={ticket.status}/>{ticket.status!=='closed'&&<SlaBadge sla={ticket.sla}/>}</div></div>
+    {error&&<div className="error-box">{error}</div>}{success&&<div className="success-box">{success}</div>}
+    <div className="grid-detail"><div>
+      <div className="card"><h2>Issue details</h2><p className="description">{ticket.description}</p><dl className="detail-list ticket-context"><dt>Raised by</dt><dd>{ticket.requester_name}</dd><dt>Ticket is for</dt><dd>{ticket.affected_name||'Branch / team issue'}</dd><dt>Affected department</dt><dd>{ticket.department_name||'Not specified'}</dd><dt>Branch</dt><dd>{ticket.branch_name||'Not specified'}</dd><dt>Assigned employee</dt><dd>{ticket.assignee_name||'Unassigned'}</dd><dt>Assigned team</dt><dd>{ticket.team_name||'—'}</dd><dt>Created</dt><dd>{new Date(ticket.created_at).toLocaleString()}</dd>{ticket.resolved_at&&<><dt>Resolved by</dt><dd>{ticket.resolved_by===user?.id?'You':ticket.assignee_name||'Support employee'} · {relativeTime(ticket.resolved_at)}</dd></>}</dl></div>
+      {ticket.resolution_description&&<div className="card resolution-card"><h2>Resolution</h2><p className="description">{ticket.resolution_description}</p>{ticket.confirmed_at&&<small className="muted">Confirmed {relativeTime(ticket.confirmed_at)} · {ticket.closure_method==='manager_override'?'Manager override':'Employee confirmation'}</small>}</div>}
+      {attachments.length>0&&<div className="card"><h2>Attachments</h2><ul className="attachment-list">{attachments.map(file=><li key={file.id}><a href={file.file_url} download={file.file_name}>{file.file_name}</a><small>{file.kind} · {(file.size_bytes/1024).toFixed(0)} KB</small></li>)}</ul></div>}
+      <div className="card"><h2>Ticket history</h2>{history.length===0?<p className="muted">No updates recorded yet.</p>:<ol className="history-list">{history.map(h=><li key={h.id}><span className="history-dot"/><div><strong>{h.action.replaceAll('_',' ')}</strong><small>{h.actor_name||'System'} · {relativeTime(h.created_at)}</small>{h.details&&<p>{h.details}</p>}</div></li>)}</ol>}</div>
+      <div className="card"><h2>Progress updates</h2>{comments.length===0&&<p className="muted">No updates yet.</p>}<ul className="comments">{comments.map(c=><li key={c.id} className={`comment ${c.is_internal?'internal-comment':''}`}><div className="comment-head"><strong>{c.author_name}</strong>{c.is_internal===1&&<span className="badge badge-internal">Internal</span>}<span className="muted">{relativeTime(c.created_at)}</span></div><div className="comment-body">{c.body}</div></li>)}</ul><form className="comment-form" onSubmit={submitComment}><textarea value={comment} onChange={e=>setComment(e.target.value)} rows={3} placeholder="Add a progress update for the ticket participants"/><button className="btn-primary" disabled={busy||!comment.trim()}>Post update</button></form></div>
+    </div><aside className="card side-panel"><h2>Ticket actions</h2>
+      {support&&<div className="staff-controls">
+        {can&&<><label>Assign employee<select value={assignee} onChange={e=>{setAssignee(e.target.value);setTeam('');}}><option value="">Choose employee</option>{agents.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}</select></label><label>Or assign team<select value={team} onChange={e=>{setTeam(e.target.value);setAssignee('');}}><option value="">Choose team</option>{teams.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></label><button className="btn-ghost btn-sm" disabled={busy||(!assignee&&!team)} onClick={()=>void act('assign',assignee?{assignee_id:Number(assignee)}:{team_id:Number(team)})}>Assign / reassign</button>
+        <label>Priority<select value={ticket.priority} onChange={e=>void act('priority',{priority:e.target.value})}>{PRIORITIES.map(p=><option key={p} value={p}>{PRIORITY_LABELS[p]}</option>)}</select></label></>}
+        {(assigned||manager)&&ticket.status!=='resolved'&&ticket.status!=='closed'&&<><div className="transition-buttons"><button className="btn-ghost btn-sm" disabled={busy} onClick={()=>void act('status',{status:'in_progress'})}>Start work</button><button className="btn-ghost btn-sm" disabled={busy} onClick={()=>void act('status',{status:'on_hold',reason})}>Put on hold</button><button className="btn-ghost btn-sm" disabled={busy} onClick={()=>void act('status',{status:'escalated',reason})}>Escalate</button></div><label>Reason for hold / escalation<input value={reason} onChange={e=>setReason(e.target.value)} placeholder="Required when putting on hold"/></label><form onSubmit={submitResolution}><label>Resolution summary<textarea required minLength={8} value={resolution} onChange={e=>setResolution(e.target.value)} rows={3} placeholder="What was fixed?"/></label><label>Resolution attachment (optional)<input type="file" accept="image/png,image/jpeg,image/webp,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={e=>{const file=e.target.files?.[0]??null;if(file&&file.size>5*1024*1024){setError('Resolution attachment must be 5 MB or smaller.');setResolutionFile(null);}else setResolutionFile(file);}}/></label><button className="btn-primary" disabled={busy}>Mark resolved</button></form></>}
+      </div>}
+      {canConfirm&&<div className="confirm-panel"><h3>Awaiting your confirmation</h3><p className="muted">Did the fix resolve the issue?</p><button className="btn-primary" disabled={busy} onClick={()=>void act('confirm',manager?{reason:'Manager confirmed ticket resolution'}:{})}>Mark as done · Close ticket</button><label>Reopen reason<input value={reason} onChange={e=>setReason(e.target.value)} placeholder="Describe what is still wrong"/></label><button className="btn-ghost" disabled={busy||reason.trim().length<5} onClick={()=>void act('reopen',{reason})}>Reopen ticket</button></div>}
+      {manager&&ticket.status!=='closed'&&<div className="confirm-panel"><h3>Manager override</h3><label>Reason<input value={reason} onChange={e=>setReason(e.target.value)} placeholder="Required for an exceptional closure"/></label><button className="btn-ghost" disabled={busy||reason.trim().length<5} onClick={()=>void act('manager_close',{reason})}>Close with reason</button></div>}
+      {user?.permissions?.includes('view_internal_notes')&&<form className="internal-note" onSubmit={submitNote}><h3>Internal note</h3><textarea value={note} onChange={e=>setNote(e.target.value)} rows={3} placeholder="Visible only to authorised support staff"/><button className="btn-ghost btn-sm" disabled={busy||!note.trim()}>Add internal note</button></form>}
+    </aside></div>
+  </section>;
 }

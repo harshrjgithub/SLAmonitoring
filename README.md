@@ -1,126 +1,145 @@
-# 🎫 HelpDeskHQ
+# BankOps
 
-[![CI](https://github.com/kyle21pixel/helpdesk-hq/actions/workflows/ci.yml/badge.svg)](https://github.com/kyle21pixel/helpdesk-hq/actions/workflows/ci.yml)
-![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)
-![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)
-![Node](https://img.shields.io/badge/Node-24-339933?logo=node.js&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-42%20passing-brightgreen)
-![License](https://img.shields.io/badge/License-MIT-blue)
+BankOps is a fictional bank's internal IT service desk. Employees can report workplace IT issues, while support staff and managers triage, assign, track, resolve, and close tickets. It is a portfolio/demo application: it does not connect to real banking systems or handle real customer data.
 
-A full-stack **IT support ticketing system** — think a lightweight ServiceNow / Zendesk for an internal helpdesk. Built end-to-end in TypeScript: a REST API with role-based access and **SLA tracking**, and a React single-page app for raising, triaging, and resolving tickets.
+## Demo video
 
-> Built to demonstrate that I can combine **IT domain knowledge** (ticket lifecycles, SLAs, agent workflows) with **real software engineering** (typed end-to-end, tested, CI-validated). Companion to my [Active Directory homelab](https://github.com/kyle21pixel/active-directory-homelab) and [ITOpsKit](https://github.com/kyle21pixel/ITOpsKit).
+The repository currently has no recorded demo video. To add one, save the recording as `docs/bankops-demo.mp4` and replace this note with:
 
----
+```markdown
+<video src="docs/bankops-demo.mp4" controls width="800"></video>
+```
 
-## Features
+GitHub may not play MP4 files embedded directly from the repository in every view. For a hosted clip, upload the video to a GitHub Release or GitHub user attachment and link it here.
 
-- 🔐 **Authentication & roles** — register/login with JWT-style tokens; three roles (**user**, **agent**, **admin**) with enforced permissions
-- 🎫 **Ticket lifecycle** — a proper **status state machine** (`open → in_progress → on_hold → resolved → closed`, with reopen) that rejects illegal transitions
-- ⏱️ **SLA tracking** — every ticket gets a priority-based resolution deadline and is classified **on-track / at-risk / breached / met** in real time
-- 👥 **Agent workflows** — assign tickets, change priority, progress status; end-users only see and comment on their own tickets
-- 💬 **Threaded comments** between requesters and agents
-- 📊 **Dashboard** — open/unassigned counts, SLA breach/at-risk metrics, and status/priority breakdowns
-- 🔎 **Filtering** by status, priority, and assignment (mine / unassigned)
+## What the platform does
 
-## Tech stack
+- **Organisation-wide ticket queue:** active employees can search, sort, and filter the ticket list by department, branch, category, priority, status, and assignee.
+- **Simple ticket reporting:** title, description, and category are required; priority defaults to Medium. Department, affected employee, assignment, and attachments are optional.
+- **Clear ownership:** the authenticated employee is the requester; affected employee, affected department, branch, assigned person, and assigned team are stored separately.
+- **Ticket lifecycle:** Open → Assigned → In Progress → On Hold or Escalated → Resolved → Closed, with reopening and server-validated transitions.
+- **Resolution confirmation:** assigned support staff record a resolution; the requester or affected employee can confirm it or reopen it with a reason. Managers can apply a reasoned override.
+- **Assignment and administration:** managers and authorised support staff can assign or reassign employees and teams, adjust priority, and manage employee accounts and organisation data according to permissions.
+- **Privacy controls:** restricted HR and cybersecurity tickets, internal notes, and their attachments are permission-checked by the API.
+- **Audit and notifications:** ticket history records key actions; relevant employees receive in-app notifications for ticket events. Managers also see SLA risk/overdue alerts.
+- **SLA visibility:** ticket deadlines and at-risk/breached states are calculated from priority.
+- **Responsive interface:** dashboard, ticket queue, ticket details, notifications, employee administration, and password-change screens.
 
-| Layer | Choice | Why |
+## Demo logins
+
+These accounts are seeded the first time the server starts with an empty database. All use the demo-only password `Password123!`.
+
+| Account | Role | Login |
 |---|---|---|
-| API | Node + **Express** (TypeScript) | ubiquitous, easy to read |
-| Database | **`node:sqlite`** (built-in) | zero native modules — clones and runs with no DB server to install |
-| Auth | **`node:crypto`** (scrypt + HMAC) | no auth dependencies; demonstrates the primitives behind password hashing and signed tokens |
-| Frontend | **React 18 + Vite** (TypeScript) | fast, modern SPA tooling |
-| Tests | **Vitest + Supertest** | unit tests for domain logic + full HTTP integration tests |
-| CI | **GitHub Actions** | typecheck + test the API, typecheck + build the web app |
+| Kyle Admin | Manager / admin | `admin@helpdesk.local` |
+| Lucy Achieng | IT support | `agent1@helpdesk.local` |
+| Brian Kim | IT support | `agent2@helpdesk.local` |
+| Anna Moore | Employee | `anna@corp.local` |
+| James Otieno | Employee | `james@corp.local` |
 
-The only runtime dependencies are `express` and `cors` — everything else (SQLite, hashing, tokens) uses the Node standard library.
+The login page's **Demo manager sign in** button fills the manager credentials. Demo credentials are public by design: do not reuse them outside a local demo. If an existing database already contains users, seeding does not reset or replace those accounts. Remove the local database file to start with fresh demo data (this permanently deletes that local database).
 
-## Architecture
+## Technology
 
-```
-helpdesk-hq/
-├── server/                     # Express REST API
-│   ├── src/
-│   │   ├── sla.ts              # SLA policy & calculations  (pure, unit-tested)
-│   │   ├── tickets.ts         # status state machine & stats (pure, unit-tested)
-│   │   ├── auth.ts            # scrypt hashing + HMAC tokens + middleware
-│   │   ├── db.ts / seed.ts    # SQLite schema and demo data
-│   │   ├── routes/            # auth, tickets, stats
-│   │   └── app.ts             # Express app factory (DB injected → testable)
-│   └── tests/                 # 42 Vitest tests (unit + Supertest integration)
-└── web/                        # React + Vite SPA
-    └── src/
-        ├── lib/               # api client, auth context, types, formatting
-        ├── components/        # shared badges
-        └── pages/             # login, dashboard, ticket list/detail, new ticket
-```
+| Part | Technology |
+|---|---|
+| Frontend | React 18, TypeScript, Vite |
+| API | Node.js 24+, Express, TypeScript |
+| Database | Node's built-in `node:sqlite` with schema migrations |
+| Authentication | `node:crypto` scrypt password hashes and signed session tokens |
+| API tests | Vitest and Supertest |
 
-The API is built as a **factory that takes a database instance**, so integration tests spin up the whole app against a fresh in-memory SQLite DB — fast and fully isolated.
+## Run locally
 
-## Running locally
+Requirements: Node.js 24 or later and npm. The SQLite database is created as `server/helpdesk.db` by default. Set `DB_PATH` to change it; set `PORT` to change the API port (default `4000`).
 
-Requires **Node 24+** (for built-in `node:sqlite`).
+Terminal 1 — API:
 
 ```bash
-# 1. API  → http://localhost:4000
 cd server
-npm install
-npm run dev
-
-# 2. Web  → http://localhost:5173  (proxies /api to the server)
-cd ../web
 npm install
 npm run dev
 ```
 
-Open http://localhost:5173. The database is seeded on first run with demo users and tickets.
+Terminal 2 — web app:
 
-### Demo accounts (password `Password123!` for all)
+```bash
+cd web
+npm install
+npm run dev
+```
 
-| Email | Role | Sees |
-|---|---|---|
-| `admin@helpdesk.local` | admin | everything + dashboard |
-| `agent1@helpdesk.local` | agent | all tickets, can assign/resolve |
-| `anna@corp.local` | user | only her own tickets |
+Open [http://localhost:5173](http://localhost:5173). Vite proxies `/api` requests to `http://127.0.0.1:4000`. The API health endpoint is `http://localhost:4000/api/health`.
 
-## Testing
+## Ticket attachments and local file management
+
+- Users can attach up to **three files per upload**, with a **5 MB per-file limit**.
+- Accepted types: PNG, JPEG, WebP, PDF, plain text, and DOCX.
+- Files are stored in SQLite as base64 data URIs in `ticket_attachments`; they are not written into a project folder or uploaded to a cloud service.
+- Attachment metadata includes filename, MIME type, size, uploader, ticket, and attachment kind. Ticket deletion cascades to its attachment rows.
+- Ticket detail access uses the same sensitive-ticket and internal-note permissions as ticket data.
+- The local database contains employee accounts, tickets, comments, notifications, audit/history records, and attachment data. Keep `helpdesk.db` private and back it up as a single file when the server is stopped.
+- The database, environment files, dependency folders, and build output are excluded by `.gitignore`. Do not commit real employee, customer, or banking data.
+
+For a portfolio deployment, replace database-backed base64 storage with private object storage and short-lived authorised download links before handling larger files or real data.
+
+## Project layout
+
+```text
+server/
+  src/
+    app.ts                 Express app and API route wiring
+    auth.ts                Password hashing, signed tokens, auth/permission middleware
+    db.ts                  SQLite schema, migrations, and database setup
+    seed.ts                Fictional demo organisation and accounts
+    sla.ts                 SLA rules and deadline calculations
+    tickets.ts             Ticket categories, priorities, and status transitions
+    routes/                Auth, tickets, stats, employee, organisation, notifications APIs
+  tests/                   Unit and HTTP integration tests
+web/
+  src/
+    App.tsx                Navigation and route setup
+    lib/                   API client, authentication context, shared types
+    pages/                 Dashboard, tickets, employees, notifications, login
+    styles.css             Responsive BankOps theme
+```
+
+## Checks
 
 ```bash
 cd server
-npm test          # 42 tests: SLA math, state machine, auth crypto, and full API flows
+npm test
 npm run typecheck
+
+cd ../web
+npm run build
 ```
 
-The suite covers the logic that matters:
-- **SLA** — due-date math per priority, at-risk threshold, breach vs met
-- **State machine** — every legal/illegal transition, resolve/reopen side-effects
-- **Auth** — password verify, tampered/expired token rejection
-- **API** — auth guards, role permissions, ticket CRUD, comment threads, dashboard aggregates
+The API suite covers auth, permissions, ticket lifecycle, assignment, resolution confirmation/reopening, sensitive-ticket visibility, and audit/history behavior.
 
-## API reference
+## API overview
 
-| Method | Route | Auth | Purpose |
-|---|---|---|---|
-| `POST` | `/api/auth/register` | — | create an end-user account |
-| `POST` | `/api/auth/login` | — | obtain a token |
-| `GET` | `/api/auth/me` | any | current user |
-| `GET` | `/api/tickets` | any | list (scoped to own tickets for users); `?status=&priority=&assignee=` |
-| `POST` | `/api/tickets` | any | raise a ticket |
-| `GET` | `/api/tickets/:id` | any | ticket + comments |
-| `PATCH` | `/api/tickets/:id` | agent/admin | status / priority / assignee |
-| `POST` | `/api/tickets/:id/comments` | requester/staff | add a comment |
-| `GET` | `/api/stats` | agent/admin | dashboard metrics |
-| `GET` | `/api/stats/agents` | agent/admin | assignable staff |
+All API routes are under `/api`.
 
-## Roadmap
+| Route | Purpose |
+|---|---|
+| `/health` | API health check |
+| `/auth/login`, `/auth/me`, `/auth/change-password` | Authentication and session profile |
+| `/tickets` | Ticket list, filters, creation, details, comments, and workflow actions |
+| `/employees`, `/organisation` | Employee directory and organisation data/admin operations |
+| `/notifications` | In-app notifications and read state |
+| `/stats`, `/stats/agents` | Dashboard metrics and support staffing |
 
-- [ ] File attachments on tickets
-- [ ] Email notifications on assignment / status change
-- [ ] Business-hours-aware SLA (currently elapsed-time)
-- [ ] Playwright end-to-end tests in CI
-- [ ] Docker Compose for one-command startup
+Ticket mutations are checked against current user permissions on the API. UI visibility alone is not treated as authorisation.
 
----
+## Notes and limitations
 
-**Author:** Kyle — [@kyle21pixel](https://github.com/kyle21pixel). Part of a portfolio spanning IT infrastructure ([AD homelab](https://github.com/kyle21pixel/active-directory-homelab)), automation ([ITOpsKit](https://github.com/kyle21pixel/ITOpsKit)), security ([SOC lab](https://github.com/kyle21pixel/soc-detection-lab)), and full-stack development (this app).
+- The project uses fictional seed data and is for demonstration. It is not a production banking system.
+- SLA calculations use elapsed time; business calendars and holidays are not configured.
+- In-app notifications are implemented; email and SMS delivery are not.
+- Optional automatic closure after a confirmation timeout is not implemented.
+- Attachments live inside SQLite for simplicity, so the database grows with uploaded files.
+
+## License
+
+This repository retains its upstream MIT license. See [LICENSE](LICENSE) if included in the repository.

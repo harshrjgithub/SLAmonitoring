@@ -4,9 +4,9 @@
   "description": "HelpDeskHQ REST API — Express + node:sqlite, dependency-light auth via node:crypto.",
   "type": "module",
   "license": "MIT",
-  "author": "Kyle (github.com/kyle21pixel)",
+  "author": "harsh (https://github.com/harshrjgithub",
   "engines": {
-    "node": ">=22.5.0"
+    "node": ">=24.0.0"
   },
   "scripts": {
     "dev": "tsx watch src/server.ts",

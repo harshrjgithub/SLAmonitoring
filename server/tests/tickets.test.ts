@@ -17,14 +17,14 @@ describe('status state machine', () => {
     expect(canTransition('resolved', 'closed')).toBe(true);
   });
 
-  it('allows reopening a resolved ticket but not a closed one', () => {
-    expect(canTransition('resolved', 'in_progress')).toBe(true);
-    expect(canTransition('closed', 'in_progress')).toBe(false);
-    expect(allowedTransitions('closed')).toEqual([]);
+  it('allows explicit reopening from resolved or closed tickets', () => {
+    expect(canTransition('resolved', 'reopened')).toBe(true);
+    expect(canTransition('closed', 'reopened')).toBe(true);
+    expect(canTransition('reopened', 'in_progress')).toBe(true);
   });
 
   it('rejects illegal jumps', () => {
-    expect(canTransition('open', 'closed')).toBe(true); // allowed: cancel a ticket
+    expect(canTransition('open', 'closed')).toBe(false);
     expect(canTransition('closed', 'open')).toBe(false);
     expect(() => transitionStatus('closed', 'open')).toThrow(/Illegal transition/);
   });
@@ -38,7 +38,7 @@ describe('status state machine', () => {
   });
 
   it('flags when a resolved ticket is reopened', () => {
-    expect(transitionStatus('resolved', 'in_progress')).toEqual({ resolved: false, reopened: true });
+    expect(transitionStatus('resolved', 'reopened')).toEqual({ resolved: false, reopened: true });
   });
 
   it('throws on an unknown target status', () => {
